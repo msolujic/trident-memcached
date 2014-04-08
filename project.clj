@@ -13,7 +13,7 @@
 
   :profiles {
       :provided {
-      :dependencies [[storm "0.9.0-wip15"]
+      :dependencies [[storm "0.9.0.1"]
                      [org.clojure/clojure "1.4.0"]
                      ]}}
   )
