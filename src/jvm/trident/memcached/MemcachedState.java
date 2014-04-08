@@ -5,6 +5,7 @@ import backtype.storm.topology.ReportedFailedException;
 import backtype.storm.tuple.Values;
 import backtype.storm.Config;
 import backtype.storm.metric.api.CountMetric;
+
 import com.twitter.finagle.ApiException;
 import com.twitter.finagle.ApplicationException;
 import com.twitter.finagle.ChannelBufferUsageException;
@@ -12,6 +13,7 @@ import com.twitter.finagle.ChannelException;
 import com.twitter.finagle.CodecException;
 import com.twitter.finagle.RequestException;
 import com.twitter.finagle.ServiceException;
+
 import java.io.Serializable;
 import java.net.InetSocketAddress;
 import java.net.UnknownHostException;
@@ -52,20 +54,26 @@ import storm.trident.state.map.SnapshottableMap;
 import storm.trident.state.map.TransactionalMap;
 
 public class MemcachedState<T> implements IBackingMap<T> {
-    private static final Map<StateType, Serializer> DEFAULT_SERIALZERS = new HashMap<StateType, Serializer>() {{
+    private static final Map<StateType, Serializer> DEFAULT_SERIALZERS = new HashMap<StateType, Serializer>() {
+
+		private static final long serialVersionUID = 9089295270684544005L;
+
+	{
         put(StateType.NON_TRANSACTIONAL, new JSONNonTransactionalSerializer());
         put(StateType.TRANSACTIONAL, new JSONTransactionalSerializer());
         put(StateType.OPAQUE, new JSONOpaqueSerializer());
     }};
 
     public static class Options<T> implements Serializable {
-        public int localCacheSize = 1000;
+
+    	private static final long serialVersionUID = -2402806931979719961L;
+		public int localCacheSize = 1000;
         public String globalKey = "$GLOBAL$";
         public Serializer<T> serializer = null;
         public long expiration = 0;
         public int requestRetries = 2;         // max number of retries after the first failure.
         public int connectTimeoutMillis = 200; // tcp connection timeout.
-        public int requestTimeoutMillis = 50;  // request timeout.
+        public int requestTimeoutMillis = 100;  // request timeout.
         public int e2eTimeoutMillis = 500;     // end-to-end request timeout.
         public int hostConnectionLimit = 10;   // concurrent connections to one server.
         public int maxWaiters = 2;             // max waiters in the request queue.
@@ -96,8 +104,10 @@ public class MemcachedState<T> implements IBackingMap<T> {
         return new Factory(servers, StateType.NON_TRANSACTIONAL, opts);
     }
 
-    protected static class Factory implements StateFactory {
-        StateType _type;
+    public static class Factory implements StateFactory {
+
+    	private static final long serialVersionUID = -7178278857435528182L;
+		StateType _type;
         List<InetSocketAddress> _servers;
         Serializer _ser;
         Options _opts;
@@ -118,7 +128,7 @@ public class MemcachedState<T> implements IBackingMap<T> {
 
         @Override
         public State makeState(Map conf, IMetricsContext context, int partitionIndex, int numPartitions) {
-            MemcachedState s;
+        	MemcachedState s;
             try {
                 s = new MemcachedState(makeMemcachedClient(_opts, _servers), _opts, _ser);
             } catch (UnknownHostException e) {
@@ -145,7 +155,7 @@ public class MemcachedState<T> implements IBackingMap<T> {
        * @param endpoints list of {@code InetSocketAddress} for all the memcached servers.
        * @return {@link Client} to read/write to the hash ring of the servers..
        */
-      static Client makeMemcachedClient(Options opts, List<InetSocketAddress> endpoints)
+      public static Client makeMemcachedClient(Options<?> opts, List<InetSocketAddress> endpoints)
           throws UnknownHostException {
         com.twitter.finagle.memcached.Client client =
             KetamaClientBuilder.get()
@@ -183,13 +193,13 @@ public class MemcachedState<T> implements IBackingMap<T> {
     }
     
     private final Client _client;
-    private Options _opts;
-    private Serializer _ser;
+    private Options<T> _opts;
+    private Serializer<T> _ser;
     CountMetric _mreads;
     CountMetric _mwrites;
     CountMetric _mexceptions;
     
-    public MemcachedState(Client client, Options opts, Serializer<T> ser) {
+    public MemcachedState(Client client, Options<T> opts, Serializer<T> ser) {
         _client = client;
         _opts = opts;
         _ser = ser;
@@ -199,11 +209,11 @@ public class MemcachedState<T> implements IBackingMap<T> {
     @Override
     public List<T> multiGet(List<List<Object>> keys) {
         try {
-            LinkedList<String> singleKeys = new LinkedList();
+            LinkedList<String> singleKeys = new LinkedList<String>();
             for(List<Object> key: keys) {
                 singleKeys.add(toSingleKey(key));
             }
-            List<T> ret = new ArrayList(singleKeys.size());
+            List<T> ret = new ArrayList<T>(singleKeys.size());
             while(!singleKeys.isEmpty()) {
                 List<String> getBatch = new ArrayList<String>(_opts.maxMultiGetBatchSize);
                 for(int i=0; i<_opts.maxMultiGetBatchSize && !singleKeys.isEmpty(); i++) {
@@ -213,14 +223,14 @@ public class MemcachedState<T> implements IBackingMap<T> {
                 for(String k: getBatch) {
                     ChannelBuffer entry = result.get(k);
                     if (entry != null) {
-                      T val = (T)_ser.deserialize(entry.array());
+                      T val = _ser.deserialize(entry.array());
                       ret.add(val);
                     } else {
                       ret.add(null);
                     }
                 }
             }
-	    _mreads.incrBy(ret.size());
+//	    _mreads.incrBy(ret.size());
             return ret;
         } catch(Exception e) {
             checkMemcachedException(e);
@@ -231,7 +241,7 @@ public class MemcachedState<T> implements IBackingMap<T> {
     @Override
     public void multiPut(List<List<Object>> keys, List<T> vals) {
         try {
-            List<Future> futures = new ArrayList(keys.size());
+            List<Future> futures = new ArrayList<Future>(keys.size());
             for(int i=0; i<keys.size(); i++) {
                 String key = toSingleKey(keys.get(i));
                 T val = vals.get(i);
@@ -245,15 +255,16 @@ public class MemcachedState<T> implements IBackingMap<T> {
             for(Future future: futures) {
                 future.get();
             }
-	    _mwrites.incrBy(futures.size());
+//	    _mwrites.incrBy(futures.size());
         } catch(Exception e) {
+        	e.printStackTrace();
             checkMemcachedException(e);
         }
     }
     
     
     private void checkMemcachedException(Exception e) {
-	_mexceptions.incr();
+//	_mexceptions.incr();
         if(e instanceof RequestException ||
            e instanceof ChannelException ||
            e instanceof ServiceException ||
@@ -268,7 +279,7 @@ public class MemcachedState<T> implements IBackingMap<T> {
     }
 
     private void registerMetrics(Map conf, IMetricsContext context) {
-      int bucketSize = (int)(conf.get(Config.TOPOLOGY_BUILTIN_METRICS_BUCKET_SIZE_SECS));
+      Integer bucketSize = (Integer)(conf.get(Config.TOPOLOGY_BUILTIN_METRICS_BUCKET_SIZE_SECS));
       _mreads = context.registerMetric("memcached/readCount", new CountMetric(), bucketSize);
       _mwrites = context.registerMetric("memcached/writeCount", new CountMetric(), bucketSize);
       _mexceptions = context.registerMetric("memcached/exceptionCount", new CountMetric(), bucketSize);

@@ -7,14 +7,17 @@ import backtype.storm.generated.StormTopology;
 import backtype.storm.tuple.Fields;
 import backtype.storm.tuple.Values;
 import backtype.storm.utils.Utils;
+
 import com.thimbleware.jmemcached.CacheImpl;
 import com.thimbleware.jmemcached.Key;
 import com.thimbleware.jmemcached.LocalCacheElement;
 import com.thimbleware.jmemcached.MemCacheDaemon;
 import com.thimbleware.jmemcached.storage.CacheStorage;
 import com.thimbleware.jmemcached.storage.hash.ConcurrentLinkedHashMap;
+
 import java.net.InetSocketAddress;
 import java.util.Arrays;
+
 import storm.trident.TridentState;
 import storm.trident.TridentTopology;
 import storm.trident.operation.BaseFunction;
@@ -42,17 +45,21 @@ public class Test {
         daemon.start();
     }
 
-     public static class Split extends BaseFunction {
-        @Override
-        public void execute(TridentTuple tuple, TridentCollector collector) {
-            String sentence = tuple.getString(0);
-            for(String word: sentence.split(" ")) {
-                collector.emit(new Values(word));                
-            }
-        }
-    }
+	public static class Split extends BaseFunction {
+
+		private static final long serialVersionUID = -7570424415005419404L;
+
+		@Override
+		public void execute(TridentTuple tuple, TridentCollector collector) {
+			String sentence = tuple.getString(0);
+			for (String word : sentence.split(" ")) {
+				collector.emit(new Values(word));
+			}
+		}
+	}
     
-    public static StormTopology buildTopology(LocalDRPC drpc, StateFactory state) {
+    @SuppressWarnings("unchecked")
+	public static StormTopology buildTopology(LocalDRPC drpc, StateFactory state) {
         FixedBatchSpout spout = new FixedBatchSpout(new Fields("sentence"), 3,
                 new Values("the cow jumped over the moon"),
                 new Values("the man went to the store and bought some candy"),

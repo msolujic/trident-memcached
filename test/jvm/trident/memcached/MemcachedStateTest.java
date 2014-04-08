@@ -13,11 +13,11 @@ import com.thimbleware.jmemcached.LocalCacheElement;
 import com.thimbleware.jmemcached.MemCacheDaemon;
 import com.thimbleware.jmemcached.storage.CacheStorage;
 import com.thimbleware.jmemcached.storage.hash.ConcurrentLinkedHashMap;
-
 import com.twitter.finagle.memcached.java.Client;
 
 import junit.framework.TestCase;
 import storm.trident.state.Serializer;
+import trident.memcached.MemcachedState;
 
 public class MemcachedStateTest extends TestCase {
   private static final MemCacheDaemon<LocalCacheElement> daemon =
@@ -26,25 +26,31 @@ public class MemcachedStateTest extends TestCase {
   private static final long SEED = 8682522807148012L;
   private static final Random RANDOM = new Random(SEED);
 
+  /**
+   * 
+   * @throws Exception
+   */
   public void testCache() throws Exception {
     // Start memcached.
     CacheStorage<Key, LocalCacheElement> storage =
-        ConcurrentLinkedHashMap.create(
-                                          ConcurrentLinkedHashMap.EvictionPolicy.FIFO, 100, 1024 * 500);
+        ConcurrentLinkedHashMap.create(ConcurrentLinkedHashMap.EvictionPolicy.FIFO, 100, 1024 * 500);
     daemon.setCache(new CacheImpl(storage));
     daemon.setAddr(new InetSocketAddress("localhost", PORT));
     daemon.start();
 
     // Build the cache client.
-    Client client = MemcachedState.Factory.makeMemcachedClient(Arrays.asList(new InetSocketAddress("localhost", PORT)));
-    MemcachedState<Integer> state = new MemcachedState<Integer>(client, new Serializer<Integer>() {
-        @Override
+    Client client = MemcachedState.Factory.makeMemcachedClient(new MemcachedState.Options(), Arrays.asList(new InetSocketAddress("localhost", PORT)));
+    MemcachedState<Integer> state = new MemcachedState<Integer>(client, new MemcachedState.Options(), new Serializer<Integer>() {
+        
+		private static final long serialVersionUID = 4203840283402320808L;
+
+		@Override
         public byte[] serialize(Integer integer) {
             return Ints.toByteArray(integer);
         }
 
         @Override
-        public Object deserialize(byte[] bytes) {
+        public Integer deserialize(byte[] bytes) {
             return Ints.fromByteArray(bytes);
         }
     });
